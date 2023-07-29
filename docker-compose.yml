@@ -1,0 +1,127 @@
+version: "3.9"
+
+volumes:
+  mysql:
+    driver: ${VOLUMES_DRIVER}
+  redis:
+    driver: ${VOLUMES_DRIVER}
+
+services:
+
+# GATEWAY
+
+  gateway:
+    container_name: gateway
+    build:
+      context: gateway/docker
+      dockerfile: development/nginx/Dockerfile
+    ports: 
+      - "8080:8080"
+      - "8081:8081"
+      - "8082:8082"
+    depends_on:
+      - frontend-nginx
+      - php-nginx
+      - py-nginx
+      
+# FRONTEND
+  
+  frontend:
+    container_name: frontend
+    build:
+      context: frontend/docker/
+      dockerfile: development/node/Dockerfile
+    volumes:
+      - ./frontend/public:/app/public
+      - ./frontend/src:/app/src
+
+  frontend-nginx:
+    container_name: frontend-nginx
+    build:
+      context: frontend/docker/
+      dockerfile: development/nginx/Dockerfile
+    volumes:
+      - ./frontend/public:/app/public
+      - ./frontend/src:/app/src
+    depends_on:
+      - frontend
+      
+      
+# BACKEND
+
+  php-nginx:
+    container_name: php-nginx
+    build:
+      context: api-php/docker
+      dockerfile: development/nginx/Dockerfile
+    volumes:
+      - ./api-php/public:/app
+    depends_on:
+      - php-fpm
+
+  php-fpm:
+    container_name: php-fpm
+    build:
+      context: api-php/docker
+      dockerfile: development/php-fpm/Dockerfile
+    volumes:
+      - ./api-php/public:/app
+  
+  php-cli:
+    container_name: php-cli
+    build:
+      context: api-php/docker
+      dockerfile: development/php-cli/Dockerfile
+    volumes:
+      - ./api-php/public:/app
+  
+  py:
+    build: 
+      context: api-py/docker
+      dockerfile: development/py/Dockerfile
+    container_name: py
+    volumes:
+      - ./api-py/public/:/app
+    command: python manage.py runserver 0.0.0.0:8000
+
+
+  py-nginx:
+    build:
+      context: api-py/docker
+      dockerfile: development/nginx/Dockerfile
+    container_name: py-ngigx
+    volumes:
+      - ./api-py/public/:/app
+    depends_on:
+      - py
+
+
+# DATABASES
+
+  mysql:
+    container_name: mysql
+    build:
+      context: databases/docker
+      dockerfile: development/mysql/Dockerfile 
+    environment:
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+    ports:
+      - "${MYSQL_PORT}:3306"
+    volumes:
+      - ${DATA_PATH_HOST}/mysql:/var/lib/mysql
+      - ${MYSQL_ENTRYPOINT_INITDB}:/docker-entrypoint-initdb.d
+  
+  redis:
+    container_name: redis
+    build:
+      context: databases/docker
+      dockerfile: development/redis/Dockerfile
+    volumes:
+      - ${DATA_PATH_HOST}/redis:/data
+    command: --requirepass ${REDIS_PASSWORD}
+    ports:
+      - "${REDIS_PORT}:6379"
+
